@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>test_BBserver</title>
+	<!--<link rel="stylesheet" type="text/css" href="/css/main.css">-->
+
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style type="text/css">
+		/*IN GAME CSS CLASS*/
+		.me{
+			background-color: darkorange;
+		}
+
+		.joueur{
+			width: 25px;
+			height: 25px;
+			border-radius: 200%;
+			position: absolute;
+		}
+		.playerToServer{
+			position: absolute;
+			width: 100px;
+			height: 12.5px;
+			top: 2.5px;
+			right: 5px;
+			font: 10px arial, sans-serif;
+		}
+		.serverToPlayer{
+			position: absolute;
+			width: 100px;
+			height: 12.5px;
+			top: 17.5px;
+			right: 5px;
+			font: 10px arial, sans-serif;
+		}
+
+		/*GENERAL CSS CLASS*/
+
+		.test_alertBox{
+		    width: 200px;
+		    height: 50px;
+		    background-color: lightgreen;
+		    position: absolute;
+		    border-radius: 3%;
+		    bottom : 15px;left : 15px;
+		    text-align: center;
+		    display: none
+		}
+    </style>
+</head>
+<body>
+	<div id="gameStart">
+			<input value="" autofocus="">
+			<button id="inputbtn">CONNECTE</button>			
+	</div>
+
+	<div id="alertBox" class="test_alertBox"></div>
+	<div class="playerToServer"><p></p></div>
+	<div class="serverToPlayer"><p></p></div>
+
+	<!-- GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAME ..... hmmhmm -->
+	<div id="avatar" class="me joueur"></div>
+	<script type="text/javascript">
+		$(document).ready(function(){
+
+			//check $('#inputbtn').event //io.connect('http://localhost:8080');
+			var socket = null;//private joke //FISK RAPHA SAURA
+
+			//keydown & keyup handler 
+			$(window).on("keydown", function (e) { keys[e.keyCode] = true });
+			$(window).on("keyup", function (e) { keys[e.keyCode] = false  });
+
+			(function () {
+			  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+			  window.requestAnimationFrame = requestAnimationFrame;
+			})();
+
+			function initGame() {
+				// nodes "on"
+            	socket            	
+            	//server confirm your next position
+	            .on('server_confirm_own_move', function( player ,  nodeX , nodeY , pEmit , sEmit ) {
+	            	//console.log( sEmit - pEmit );console.log( Date.now() - sEmit );
+	            	upd_ping( pEmit, sEmit, Date.now() );
+
+	            	avatarX = nodeX;
+				  	avatarY = nodeY;
+	            })
+	            //server send an other player's next positons
+	            .on('server_confirm_ones_move', function( player, nodeX, nodeY ) {//get other player position
+	            	players.other[player].posX = nodeX; 
+	            	players.other[player].posY = nodeY;
+	            })
+	            //new player connect / re-connect in the game
+	            .on('new_player_connected' , function( newP ){
+	            	insertNewUser( newP );// add the new player div in the DOM
+	            })
+
+				gameLoop();//init the requestAnimFrame fct
+			}
+
+			// Game setting
+			var $Avatar = $('#avatar'), 
+			  players = new Object(),
+			  avatarX = 400,
+			  avatarY = 300,
+			  velX = 0,
+			  velY = 0,
+			  keys = [],
+			  maxSpeed = 5;
+			  // pre-config 
+			  players.other = new Object();
+
+
+
+
+			var timeElaps = 20,
+				dateNow = Date.now(),
+				min = 18,
+				max = 18,
+				ctn = 0;
+
+
+			function gameLoop() {
+				//calcul rate of real TimeElaps( between2 frame) on expected timeElaps ( 20-30ms ) >>> +/- 33fps
+				let nivelRate = timeElaps/20;
+
+				//hold last frame time in "lastdatenow" & upd datenow
+				let lastDateNow = dateNow;//last datenow
+				dateNow = Date.now();
+				//calcul timeElaps of this frame
+				timeElaps = dateNow - lastDateNow;
+
+				//testing infos
+				if (timeElaps>max) { max = timeElaps};
+				if (timeElaps<min) { min = timeElaps};
+				if (ctn > 500 ) {ctn = 0 ;max = 18 ,min = 18};
+				ctn++;
+
+
+				// update velX & velY by keys (current keydown) 
+				whatKey( 1, 0.5); // speeding , slowing
+
+
+				let H = Math.sqrt( (velX * velX) + (velY * velY) );
+				let testVelX, testVelY,tmp_avatarX,tmp_avatarY;
+
+				if (H > maxSpeed) { // si l'hypothénuse du deplacement X & Y est > la distance max alors on rationnalise
+					//on cherche velX et velY tel que H == maxSpeed
+					let ratioMiseAlechelle = maxSpeed/H;//théoréme thales
+					testVelX = velX * ratioMiseAlechelle;
+					testVelY = velY * ratioMiseAlechelle;
+
+					tmp_avatarX = getNewExpectedX( testVelX * nivelRate );
+					tmp_avatarY = getNewExpectedY( testVelY * nivelRate );
+				}else{
+					tmp_avatarX = getNewExpectedX( velX * nivelRate );
+					tmp_avatarY = getNewExpectedY( velY * nivelRate );
+				}
+			  
+			  //send new calculated position to server ,this Pos wont be update until server respond !
+			  socket.emit('p_ask_move' , {  "user" : players.me.id , tmp_avatarX, tmp_avatarY , "time_pEmit" : Date.now() });
+
+			  $Avatar.css({'left': avatarX+'px', 'top' : avatarY+'px'});
+			  $.each( players.other , function( ind , val ){
+			  	$('#'+val.id).css({'left': val.posX+'px', 'top' : val.posY+'px'});
+			  })
+
+			  console.log( timeElaps  );
+			  console.log( min ," min ---- max ", max );
+			  //one frame iter time depend of the computer ( +/- [12 , 40]ms)
+			  // let say the normal frame time => 20-30ms 
+			  //if it's under/over 20 ,let adjust the speed as no one can run faster than other
+
+			  //https://stackoverflow.com/questions/1280263/changing-the-interval-of-setinterval-while-its-running
+			  //if leveling the iteration time dont work use link above on the requestionAnimationframe 
+			  // but it cant work to speed up the frame it will only slow them 
+			  requestAnimationFrame(gameLoop);
+			}
+
+			function whatKey( speeding, slowing) {
+
+				if (keys[37]) {//left
+					if (velX > -maxSpeed ) { velX -= speeding }
+				}
+				if (keys[39]) {//right
+					if (velX < maxSpeed) { velX += speeding }
+				}
+
+				if (keys[38]) {//up
+					if (velY > -maxSpeed) {	velY -= speeding }
+				}
+				if (keys[40]) {//down
+					if (velY < maxSpeed) { velY += speeding }
+				}
+
+
+				// test decélération
+				if (!keys[37] && !keys[39]) {
+					if (velX != 0 ) {
+						if ( velX > 0) { velX -= slowing }
+						if (velX < 0 ) { velX += slowing }
+					}
+				}
+				if (!keys[40] && !keys[38]) {
+					if (velY != 0 ) {
+						if ( velY > 0) { velY -= slowing }
+						if (velY < 0 ) { velY += slowing }
+					}
+				}
+
+				velX = Round1Dec( velX );
+				velY = Round1Dec( velY );
+			}
+
+			function getNewExpectedX( xSpeed ){
+				xSpeed = Round1Dec(xSpeed);
+				let tmpX = avatarX + xSpeed;
+
+				//check if new x wont be out of the map 
+				if (tmpX < 0 || tmpX > 800 ) {
+					tmpX > 800 ? tmpX = 800 : tmpX = 0;
+					//cancel the speed, the global one , not the local passed arg(xspeed)
+					velX = 0;				
+				}
+
+				//check for each blocking component on the map 
+				
+
+
+				return tmpX;
+			}
+			function getNewExpectedY( ySpeed ){
+				ySpeed = Round1Dec(ySpeed);
+				let tmpY = avatarY + ySpeed;
+
+				//check the map border 
+				if (tmpY < 0 || tmpY > 800 ) {
+					tmpY > 800 ? tmpY = 800 : tmpY = 0;
+					velY = 0;				
+				}
+				//check for blocking elements on the map 
+
+				return tmpY;
+			}
+
+			function insertNewUser( p_data ){
+				//add div.idplayer in DOM
+				$('<div></div>').attr({id : p_data.id , class : "joueur" })
+				.css({"left" : p_data.posX+"px", "top" : p_data.posY+"px", "background-color" : "purple"})
+				.appendTo("body");
+
+				//add this player info in Players
+				players.other[p_data.id] = p_data;
+			}
+
+			//IN GAME BOARD FONCTIONS 
+			function upd_ping( pSend, sSend, pGet ){
+				$('.playerToServer').text("YOU > S : " + (sSend - pSend)+"ms");
+				$('.serverToPlayer').text("S > YOU : " + (pGet - sSend)+"ms" );
+			}
+
+
+
+
+
+			$('#inputbtn').click(function(){
+				let nom =  $('input').val();
+				players.me = { id : nom , velX : 0 , velY : 0 , posX : 100 , posY : 100 };
+
+				/// SOCKET DECLARATION ////////////////////////////////////
+				/// give data in the handshake query // here is the new player id
+				socket = io.connect('http://localhost:8080' , { query: "id="+players["me"]["id"] });
+				
+				socket
+				//init the display&transmision of message Server > Player
+				.on('message' , function(data){
+					$('#alertBox').text(data).fadeIn(500 , function(){ $(this).fadeOut( 3000 ) })
+				})
+				//ask the server to send players's list in the room	
+				.emit('check_present_player' , players.me.id )
+				.on("present_player" , function(data){
+					//on loop dans data et on insert le joueur dans le tableau et le DOM ( sauf si ce joueur cest nous..)
+					$.each(data , function( ind, val){
+						if ( val.id !== players.me.id ) {
+							insertNewUser( val );
+						}
+					})
+
+					// clean display board & start 
+					$('#gameStart').hide();
+					initGame();
+
+				});
+			})
+
+			/// TOOLS FCT 
+			//https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+			function Round1Dec( num ){ //the +0.00001 is use to prevent wrong truncate of JS on float numb
+				return Math.round( (num + 0.00001) * 10) / 10;
+			}
+			function Round2Dec( num ){
+				return Math.round( (num + 0.00001) * 100) / 100;
+			}
+			function Round3Dec( num ){
+				return Math.round( (num + 0.00001) * 1000) / 1000;
+			}
+
+		})
+	</script>
+</body>
+</html>

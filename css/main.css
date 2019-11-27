@@ -1,0 +1,40 @@
+/*IN GAME CSS CLASS*/
+.me{
+	background-color: darkorange;
+}
+
+.joueur{
+	width: 25px;
+	height: 25px;
+	border-radius: 200%;
+	position: absolute;
+}
+.playerToServer{
+	position: absolute;
+	width: 100px;
+	height: 12.5px;
+	top: 2.5px;
+	right: 5px;
+	font: 10px arial, sans-serif;
+}
+.serverToPlayer{
+	position: absolute;
+	width: 100px;
+	height: 12.5px;
+	top: 17.5px;
+	right: 5px;
+	font: 10px arial, sans-serif;
+}
+
+/*GENERAL CSS CLASS*/
+
+.test_alertBox{
+    width: 200px;
+    height: 50px;
+    background-color: lightgreen;
+    position: absolute;
+    border-radius: 3%;
+    bottom : 15px;left : 15px;
+    text-align: center;
+    display: none
+}

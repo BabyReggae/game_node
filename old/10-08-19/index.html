@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>test_BBserver</title>
+
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style type="text/css">
+    	/*IN GAME CSS CLASS*/
+    	.me{
+    		background-color: darkorange;
+    	}
+
+    	.joueur{
+    		width: 25px;
+    		height: 25px;
+    		border-radius: 200%;
+    		position: absolute;
+    	}
+    	.playerToServer{
+    		position: absolute;
+    		width: 100px;
+    		height: 12.5px;
+    		top: 2.5px;
+    		right: 5px;
+    		font: 10px arial, sans-serif;
+    	}
+    	.serverToPlayer{
+    		position: absolute;
+    		width: 100px;
+    		height: 12.5px;
+    		top: 17.5px;
+    		right: 5px;
+    		font: 10px arial, sans-serif;
+    	}
+    </style>
+</head>
+<body>
+	<div id="gameStart">
+		<input value="">
+		<button id="inputbtn">CONNECTE</button>	
+	</div>
+
+	<div id="alertBox" style="width: 200px;height: 50px;background-color: lightgreen;position: absolute;border-radius: 3%;bottom : 15px;left : 15px;text-align: center;display: none"></div>
+	<div class="playerToServer"><p></p></div>
+	<div class="serverToPlayer"><p></p></div>
+
+	<!-- GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAME ..... hmmhmm -->
+	<div id="avatar" class="me joueur"></div>
+	<script type="text/javascript">
+		$(document).ready(function(){
+
+			var socket = null;//voir $('#inputbtn') //io.connect('http://localhost:8080');//FISK RAPHA SAURA
+			
+
+			(function () {
+			  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+			  window.requestAnimationFrame = requestAnimationFrame;
+			})();
+
+
+			function initGame() {
+				// nodes "on"
+            	socket            	
+            	//server confirm your next position
+	            .on('server_confirm_own_move', function( player ,  nodeX , nodeY , pEmit , sEmit ) {
+	            	upd_ping( pEmit, sEmit, Date.now() );
+
+	            	avatarX = nodeX;
+				  	avatarY = nodeY;
+	            })
+	            //server send an other player's next positons
+	            .on('server_confirm_ones_move', function( player, nodeX, nodeY ) {//get other player position
+	            	players.other[player].posX = nodeX; 
+	            	players.other[player].posY = nodeY;
+	            })
+	            //new player connect / re-connect in the game
+	            .on('new_player_connected' , function( newP ){
+	            	insertNewUser( newP );// add the new player div in the DOM
+	            })
+
+				gameLoop();//init the requestAnimFrame fct
+			}
+
+			// Game setting
+			var $Avatar = $('#avatar'), 
+			  players = new Object(),
+			  avatarX = 400,
+			  avatarY = 300,
+			  velX = 0,
+			  velY = 0,
+			  keys = [],
+			  maxSpeed = 5;
+			  // pre-config 
+			  players.other = new Object();
+
+			  setInterval(function(){}, 200)
+
+			$(window).on("keydown", function (e) {
+			  keys[e.keyCode] = true;
+			});
+			$(window).on("keyup", function (e) {
+			  keys[e.keyCode] = false;
+			});
+
+			//initGame();//on lance le jeu
+					var timeElaps = null,
+						dateNow = Date.now(),
+						min = 18,
+						max = 18,
+						ctn = 0;
+
+
+			function gameLoop() {
+					let lastLoop = dateNow;//last datenow
+					dateNow = Date.now();
+					timeElaps = dateNow - lastLoop;
+					if (timeElaps>max) { max = timeElaps};
+					if (timeElaps<min) { min = timeElaps};
+					if (ctn > 500 ) {ctn = 0 ;max = 18 ,min = 18};
+					ctn++;
+
+			  let R = whatKey();
+			  //console.log(R);
+			  let H = Math.sqrt( (velX * velX) + (velY * velY) );
+			  let testVelX, testVelY,tmp_avatarX,tmp_avatarY;
+			  if (H > maxSpeed) { // si l'hypothénuse du deplacement X & Y est > la distance max alors on rationnalise
+			  	//on cherche velX et velY tel que H == maxSpeed
+			  	let ratioMiseAlechelle = maxSpeed/H;//théoréme thales
+			  	testVelX = velX * ratioMiseAlechelle;
+			  	testVelY = velY * ratioMiseAlechelle;
+
+			  	tmp_avatarX = getNewExpectedX( testVelX );
+			  	tmp_avatarY = getNewExpectedY( testVelY );
+			  }else{
+			  	tmp_avatarX = getNewExpectedX( velX );
+			  	tmp_avatarY = getNewExpectedY( velY );
+			  }
+
+			  console.log(  Math.sqrt( (testVelY * testVelY) + (testVelX * testVelX) ) )
+			  //calcul new expected position
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*let dX = tmp_avatarX - avatarX;
+			  let dY = tmp_avatarY - avatarY;
+			  let tmpH = Math.sqrt( (velX * velX) + (velY * velY) );
+			  if (tmpH != 0) {
+				  dX = dX * ( velX / tmpH);
+				  dY = dY * ( velY / tmpH);			  	
+			  }
+
+			  if (keys[37]) {tmp_avatarX = avatarX - dX;}
+			  if (keys[38]) {tmp_avatarY = avatarY - dY;}
+			  if (keys[39]) {tmp_avatarX = avatarX + dX;}
+			  if (keys[40]) {tmp_avatarY = avatarY + dY;}
+			 
+			  console.log("Vx : " + velX, "Vy : " + velY)*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  /*TEEESSSTT TEEEESSSSTTTTTTT*/
+			  //send to node
+			  
+
+			  socket.emit('p_ask_move' , {  "user" : players.me.id , tmp_avatarX, tmp_avatarY , "time_pEmit" : Date.now() });
+
+
+
+
+			  $Avatar.css({'left': avatarX+'px', 'top' : avatarY+'px'});
+
+			  $.each( players.other , function( ind , val ){
+			  	$('#'+val.id).css({'left': val.posX+'px', 'top' : val.posY+'px'});
+			  })
+
+
+			  //console.log( timeElaps  );
+			  //console.log( "min : " + min , "max : " + max );
+			  requestAnimationFrame(gameLoop);
+			}
+
+			function whatKey() {
+				/*if (velX === 0) { // Impulsion , cant create ratioX & Y if no speed at all
+					if (keys[37]) { velX -= 0.1 };
+					if (keys[39]) { velX += 0.1 };
+				}
+				if (velY === 0) {
+					if (keys[38]) { velY -= 0.1 };
+					if (keys[40]) { velY += 0.1 };
+				}*/
+				// TEST TEST TEST
+				//NEED TO OPTIMIZE Math.abs .... DONT FORGET DUDE ^^ 
+				let ratioX = Math.abs(velX) / ( Math.abs(velX) + Math.abs(velY) ),
+					ratioY = Math.abs(velY) / ( Math.abs(velX) + Math.abs(velY) ),
+					speedingX = Round2Dec( 0.5 * ratioX ),
+					speedingY = Round2Dec( 0.5 * ratioY ),
+					maxSpeedX = maxSpeed,//Round2Dec(maxSpeed * ratioX ),
+					maxSpeedY = maxSpeed//Round2Dec(maxSpeed * ratioY ); 
+
+					console.log("ratioX : " + Round2Dec( ratioX ) , "///// ratioY : " +Round2Dec( ratioY ) );
+			  if (keys[37]) {//left
+			    //velX = -10;
+			    if (velX > -maxSpeedX ) {
+			      velX -= 1;
+			    }else{
+			    	//velX = -maxSpeedX;
+			    }
+			  }
+
+			  if (keys[39]) {//right
+			    //velX = 10;
+			    if (velX < maxSpeedX) {
+			      velX += 1;
+			    }else{
+			    	//velX = maxSpeedX; // si la maxSpeedX est réduite à cause du ratio plus favorable en Y alors on redescend la vitesse par l'augmentation de l'axe Y
+			    }
+			  }
+
+			  // test decélération
+			  if (!keys[37] && !keys[39]) {
+			  	if (velX != 0 ) {
+			  		if ( velX > 0) {
+			  			velX -= 1;
+			  		}
+			  		if (velX < 0 ) {
+			  			velX += 1;
+			  		}
+			  	}
+			  }
+
+
+
+			  if (keys[40]) {//down
+			    //velY = 10;
+			    if (velY < maxSpeedY) {
+			      velY += 1;
+			    }else{
+			    	//velY = maxSpeedY;
+			    }
+			  }
+			  if (keys[38]) {//up
+			    //velY = -10;
+			    if (velY > -maxSpeedY) {
+			      velY -= 1;
+			    }else{
+			    	//velY = -maxSpeedY;
+			    }
+			  }
+			  if (!keys[40] && !keys[38]) {
+			  	if (velY != 0 ) {
+			  		if ( velY > 0) {
+			  			velY -= 1;
+			  		}
+			  		if (velY < 0 ) {
+			  			velY += 1;
+			  		}
+			  	}
+			  }
+
+			}
+			//https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+			function getNewExpectedX( xSpeed ){
+				xSpeed = Round1Dec(xSpeed);
+				let tmpX = avatarX + xSpeed;
+				if (tmpX > 800 ) tmpX = 800;
+				if (tmpX < 0 ) tmpX = 0;
+				return tmpX;
+			}
+			function getNewExpectedY( ySpeed ){
+				ySpeed = Round1Dec(ySpeed);
+				let tmpY = avatarY + ySpeed;
+				if (tmpY > 800 ) tmpY = 800;
+				if (tmpY < 0 ) tmpY = 0;
+				return tmpY;
+			}
+
+			function insertNewUser( p_data ){
+				//add div.idplayer in DOM
+				$('<div></div>').attr({id : p_data.id , class : "joueur" })
+				.css({"left" : p_data.posX+"px", "top" : p_data.posY+"px", "background-color" : "purple"})
+				.appendTo("body");
+
+				//add this player info in Players
+				players.other[p_data.id] = p_data;
+			}
+
+			//IN GAME BOARD FONCTIONS 
+			function upd_ping( pSend, sSend, pGet ){
+				$('.playerToServer').text("YOU > S : " + (sSend - pSend)+"ms");
+				$('.serverToPlayer').text("S > YOU : " + (pGet - sSend)+"ms" );
+			}
+
+
+
+
+
+			$('#inputbtn').click(function(){
+				let nom =  $('input').val();
+				players.me = { id : nom , velX : 0 , velY : 0 , posX : 100 , posY : 100 };
+
+				/// SOCKET DECLARATION ////////////////////////////////////
+				/// give data in the handshake query // here is the new player id
+				socket = io.connect('http://localhost:8080' , { query: "id="+players["me"]["id"] });
+				
+				socket
+				//init the display&transmision of message Server > Player
+				.on('message' , function(data){
+					$('#alertBox').text(data).fadeIn(500 , function(){ $(this).fadeOut( 3000 ) })
+				})
+				//ask the server to send players's list in the room	
+				.emit('check_present_player' , players.me.id )
+				.on("present_player" , function(data){
+					//on loop dans data et on insert le joueur dans le tableau et le DOM ( sauf si ce joueur cest nous..)
+					$.each(data , function( ind, val){
+						if ( val.id !== players.me.id ) {
+							insertNewUser( val );
+						}
+					})
+
+					// clean display board & start 
+					$('#gameStart').hide();
+
+					initGame();
+
+				});
+
+
+			})
+
+			/// TOOLS FCT 
+			function Round1Dec( num ){ //the +0.00001 is use to prevent wrong truncate of JS on float numb
+				return Math.round( (num + 0.00001) * 10) / 10;
+			}
+			function Round2Dec( num ){
+				return Math.round( (num + 0.00001) * 100) / 100;
+			}
+			function Round3Dec( num ){
+				return Math.round( (num + 0.00001) * 1000) / 1000;
+			}
+
+		})
+	</script>
+</body>
+</html>

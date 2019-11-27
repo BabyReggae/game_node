@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>test_BBserver</title>
+	<!--<link rel="stylesheet" type="text/css" href="/css/main.css">-->
+
+	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style type="text/css">
+		/*IN GAME CSS CLASS*/
+		*{
+			margin: 0 0 0 0;
+			padding: 0 0 0 0;
+			box-sizing: border-box;
+			overflow: hidden;
+		}
+		.me{
+			background-color: darkorange;
+		}
+
+		.joueur{
+			width: 25px;
+			height: 25px;
+			border-radius: 200%;
+			position: absolute;
+		}
+		.sight{
+			width: 5px;
+			height: 5px;
+			border-radius: 200%;
+			position: absolute;
+			background-color: cyan;
+		}
+
+		.shoot{
+			position: absolute;
+			background-color: black;
+			border-radius: 50%;
+		}
+
+		.playerToServer{
+			position: absolute;
+			width: 100px;
+			height: 12.5px;
+			top: 2.5px;
+			right: 5px;
+			font: 10px arial, sans-serif;
+		}
+		.serverToPlayer{
+			position: absolute;
+			width: 100px;
+			height: 12.5px;
+			top: 17.5px;
+			right: 5px;
+			font: 10px arial, sans-serif;
+		}
+
+		/*GENERAL CSS CLASS*/
+
+		.test_alertBox{
+		    width: 200px;
+		    height: 50px;
+		    background-color: lightgreen;
+		    position: absolute;
+		    border-radius: 3%;
+		    bottom : 15px;left : 15px;
+		    text-align: center;
+		    display: none
+		}
+
+		.z2000{
+			z-index: 2000;
+		}
+		.z1500{
+			z-index: 1500;
+		}
+		.z1000{
+			z-index: 1000;
+		}
+		.z500{
+			z-index: 500;
+		}
+	</style>
+</head>
+<body>
+
+
+
+	<!-- GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAME ..... hmmhmm -->
+	<div id="gameStart" class="z2000" style="position: absolute;">
+			<input value="" autofocus="" class="z1500">
+			<button id="inputbtn">CONNECTE</button>			
+	</div>
+
+	<div id="alertBox" class="test_alertBox z2000"></div>
+	<div class="playerToServer z2000"><p></p></div>
+	<div class="serverToPlayer z2000"><p></p></div>
+
+	<div id="htmlMap" class="z500" style="position: absolute">
+		<div id="sight_load" class="z2000" style="background-color: blue;position: absolute;border-radius: 50%"></div>
+		<div id="avatar" class="me joueur z1500">
+			<div id="sight" class="z2000" style="position: absolute;background-color: black;width: 5px;height: 5px;border-radius: 50%"></div>
+		</div>
+		<!--
+		<div id="test_block" style="background-color: purple;width:300px;height: 100px;position: absolute;top: 200px;left: 200px"></div>
+		<div id="test_block2" style="background-color: darkred;width:200px;height: 150px;position: absolute;top: 150px;left: 350px"></div>
+		<div id="test_block2" style="background-color: darkred;width:200px;height: 50px;position: absolute;top: 50px;left: 350px"></div>
+		<div id="test_block2" style="background-color: darkblue;width:100px;height: 100px;position: absolute;top: 100px;left: 100px;border-radius: 100%"></div>-->	
+	</div>
+
+
+
+	<script type="text/javascript">
+		$(document).ready(function(){
+			var Device = LocalSetUp();
+			console.log(Device);
+			// External fct set up of the map 
+			//fetch map_data in server 
+			$.getScript( "mapJs", function() { //here is the callback fct after loading mapData
+				//once data are loaded let init the view 
+				//set position & border of the map
+				$('#htmlMap').css({left : map.x, top : map.y, width : map.w, height : map.h, "background-image" :"url("+map.bg_img+")" });
+				//set blocks position, dimension and type
+				$.each( map.blocks , function( i, v){
+					let newBlock = $("<div></div>")
+					.attr({id : v.id})
+					.css({position : "absolute", left : v.x, top : v.y, width : v.w, height : v.h, "background-color" : v.color})
+
+					if (v.type === "circle") newBlock.css( {"border-radius" : "50%"} );
+					$('#htmlMap').append( newBlock );
+
+				})
+
+			});
+
+			//check $('#inputbtn').event //io.connect('http://localhost:8080');
+			var socket = null;//private joke //FISK RAPHA SAURA
+
+			//keydown & keyup handler 
+			$(window).on("keydown", function (e) { keys[e.keyCode] = true });
+			$(window).on("keyup", function (e) { keys[e.keyCode] = false  });
+
+			(function () {
+			  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+			  window.requestAnimationFrame = requestAnimationFrame;
+			})();
+
+			function initGame() {
+				// nodes "on"
+            	socket         	
+            	//server confirm your next position
+	            .on('server_confirm_own_move', function( dude, Shoots, sEmit) {
+	            	//gestion de l'affichage du ping
+	            	upd_ping( dude.time_pEmit, sEmit, Date.now() );
+
+	            	//gestion upd object shoots(players) et insert delete of related Div ele
+	            	
+	            	players.shoots = Shoots;
+	            	//insert les nouveaux
+	            	$.each( players.shoots, function( ind ,val){
+	            		if( !$('#'+val.id).length > 0 ){
+	            			insertShoot( val );
+	            		}
+	            	})
+	            	//remove les anciens
+	            	$.each( $('.shoot') , function( ind, val){
+	            		 let thisId = $(val).attr("id");
+	            		 //console.log(thisId);
+
+	            		 if (players.shoots[thisId] === undefined ) {// not sure about ===
+	            		 	removeShoot( thisId );
+	            		 }
+	            	})
+
+	            	// MAINTENANT FINIR DE FAIR LANIM LA MAJ VISUELLE EN FIN DE GAME LOOP
+	            	/////////////////////////////////////////////////////////////////
+	            	/////////////////////////////////////////////////////////////////
+	            	/////////////////////////////////////////////////////////////////
+	            	/////////////////////////////////////////////////////////////////
+
+
+	            	//s'il ya un changement de position du joueur il faut adapté la position de la map
+	            	if ( !(map.w < Device.w && map.h < Device.h)){//sauf si l'écran du joueur fais toute la map ou +
+	            		let curX = players.me.x,curY = players.me.y;
+		            	if (curX !== dude.x || curY !== dude.y) {
+
+		            		let moveX = dude.x - curX,
+		            			moveY = dude.y - curY;
+
+		            		//bord gauche jeton roue libre > move map 
+		            		if (moveX > 0 ) {//vers droite sur laxe X
+		            			if (dude.x > Device.xOrigin &&  map.x > -(map.w-Device.w)) {
+		            				map.x -= moveX;
+		            				if (map.x < -(map.w-Device.w)) map.x = -(map.w-Device.w);
+		            			}
+	
+		            		}else{//vers la gauche sur l'axeX
+		            			if (dude.x > Device.xOrigin && (map.w - dude.x) > Device.xOrigin ) {
+		            				map.x -= moveX;
+		            				if (map.x > 0) map.x = 0;
+		            			}
+		            		}
+
+		            		if (moveY > 0 ) {//vers droite sur laxe X
+		            			if (dude.y > Device.yOrigin &&  map.y > -(map.h-Device.h)) {
+		            				map.y -= moveY;
+		            				if (map.y < -(map.h-Device.h)) map.y = -(map.h-Device.h);
+		            			}
+
+		            		}else{//vers la gauche sur l'axeX
+		            			if (dude.y > Device.yOrigin && (map.h - dude.y) > Device.yOrigin ) {
+		            				map.y -= moveY;
+		            				if (map.y > 0) map.y = 0;
+		            			}
+		            		}
+		            	}	            		
+	            	}
+
+
+
+	            	//console.log( Shoots );
+	            	//dans tous les cas on update les valeur posJoueur
+	            	players.me.x = dude.x;
+	            	players.me.y = dude.y;
+	            	players.me.targX = dude.targX;
+	            	players.me.targY = dude.targY;
+	            })
+
+	            //server send an other player's next positons
+	            .on('server_confirm_ones_move', function( player, nodeX, nodeY, targX, targY ) {//get other player position
+	            	players.other[player].posX = nodeX;
+	            	players.other[player].posY = nodeY;
+	            	players.other[player].targX = targX; 
+	            	players.other[player].targY = targY;         	
+	            })
+	            //new player connect / re-connect in the game
+	            .on('new_player_connected' , function( newP ){
+	            	insertUser( newP );// add the new player div in the DOM
+	            })
+	            .on('check_connection' , function(){
+	            	socket.emit("connection_checked" , players.me)
+	            })
+	            .on('player_disconnected' , function( player_id ){
+	            	removeUser( player_id );
+	            })
+				gameLoop();//init the requestAnimFrame fct
+			}
+
+			// Game setting
+			var $Avatar = $('#avatar'),
+				$Map = $('#htmlMap'),
+				$sight = $('#sight'),//way player use to target
+				$sight_load = $("#sight_load"),
+				players = new Object(),
+				Matrice = {Z : 0, Q : 0 ,S : 0, D : 0},
+				velX = 0,
+				velY = 0,
+				keys = [],
+				maxSpeed = 8;
+
+				// pre-config
+				players.other = new Object();
+				players.shoots  = new Object();
+
+			//check performances
+			var timeElaps = 20,
+				dateNow = Date.now(),
+				min = 18,
+				max = 18,
+				ctn = 0;
+
+
+			function gameLoop() {
+				//calcul rate of real TimeElaps( between2 frame) on expected timeElaps ( 20-30ms ) >>> +/- 33fps
+				//prevent player to go faster than other because their cp upd faster 
+				let nivelRate = timeElaps/20;
+
+				//hold last frame time in "lastdatenow" & upd datenow
+				let lastDateNow = dateNow;//last datenow
+				dateNow = Date.now();
+				//calcul timeElaps of this frame
+				timeElaps = dateNow - lastDateNow;
+
+				//testing infos
+				if (timeElaps>max) { max = timeElaps};
+				if (timeElaps<min) { min = timeElaps};
+				if (ctn > 500 ) {ctn = 0 ;max = 18 ,min = 18};
+				ctn++;
+
+
+				// update velX & velY by keys (current keydown) 
+				move_keys( 1, 1); // speeding , slowing
+				let H = Math.sqrt( (velX * velX) + (velY * velY) );
+				let testVelX, testVelY,tmp_moveX,tmp_moveY;
+
+				if (H > maxSpeed) { // si l'hypothénuse du deplacement X & Y est > la distance max alors on rationnalise
+					//on cherche velX et velY tel que H == maxSpeed
+					let ratioMiseAlechelle = maxSpeed/H;//théoréme thales
+					testVelX = velX * ratioMiseAlechelle;
+					testVelY = velY * ratioMiseAlechelle;
+
+					let tmpPos = getNewPosXY( map , players.me , testVelX * nivelRate , testVelY * nivelRate );
+					tmp_moveX = tmpPos.X;
+					tmp_moveY = tmpPos.Y;
+				}else{
+					let tmpPos = getNewPosXY( map , players.me , velX * nivelRate ,velY * nivelRate );
+					tmp_moveX = tmpPos.X;
+					tmp_moveY = tmpPos.Y;				
+				}
+
+
+				//update the Matrice of target // use to dertermine where is the focus of the player
+				target_keys();
+
+				let tmp_angle = getAngleByXerode( Matrice );
+
+				if (tmp_angle !== undefined) players.me.angle = Round1Dec( tmp_angle );//may create asyncr between player & server view :s...
+
+
+				let targX = Math.round( Math.cos(players.me.angle*Math.PI/-180) * (players.me.w/2 ) + players.me.w/2 - $sight.width()/2),
+					targY = Math.round( Math.sin(players.me.angle*Math.PI/-180) * (players.me.h/2 ) + players.me.h/2 - $sight.height()/2);
+
+				target_fire();// contain emit.('p_ask_shoot');
+
+
+			  
+			  //send new calculated position to server ,this Pos wont be update until server respond !
+			  socket.emit('p_ask_move' , {  "user" : players.me.id, tmp_moveX, tmp_moveY, targX, targY, "time_pEmit" : Date.now() });
+
+
+			  $Avatar.css({'left': players.me.x+'px', 'top' : players.me.y+'px'});
+			  $sight.css({'left' : players.me.targX+'px', 'top' : players.me.targY+'px'});
+			  $sight_load.css({'left' : players.me.shoot.x+'px', 'top' : players.me.shoot.y+'px',"width" : players.me.shoot.w+'px', "height" : players.me.shoot.h+'px'});
+			  $Map.css({'left': map.x+'px', 'top' : map.y+'px'});
+
+			  
+
+			  $.each( players.other , function( ind , val ){
+			  	$('#'+val.id).css({'left': val.posX+'px', 'top' : val.posY+'px'});
+			  	$('#targ'+val.id).css({'left': val.targX+'px', 'top' : val.targY+'px'});
+			  })
+
+			  $.each( players.shoots , function( ind, val){
+			  	$('#'+val.id).css({'left': val.x+'px', 'top' : val.y+'px', "width" : val.w+'px', "height" : val.h+'px'});
+			  })		  
+			  //console.log( timeElaps  );
+			  //console.log( min ," min ---- max ", max );
+			  //one frame iter time depend of the computer ( +/- [12 , 40]ms)
+			  // let say the normal frame time => 20-30ms 
+			  //if it's under/over 20 ,let adjust the speed as no one can run faster than other
+
+			  //https://stackoverflow.com/questions/1280263/changing-the-interval-of-setinterval-while-its-running
+			  //if leveling the iteration time dont work use link above on the requestionAnimationframe 
+			  // but it cant work to speed up the frame it will only slow them 
+			  requestAnimationFrame(gameLoop);
+			}
+
+			function move_keys( speeding, slowing) {
+
+				if (keys[37]) {//left
+					if (velX > -maxSpeed ) { velX -= speeding }
+				}
+				if (keys[39]) {//right
+					if (velX < maxSpeed) { velX += speeding }
+				}
+
+				if (keys[38]) {//up
+					if (velY > -maxSpeed) {	velY -= speeding }
+				}
+				if (keys[40]) {//down
+					if (velY < maxSpeed) { velY += speeding }
+				}
+
+
+				// test decélération
+				if (!keys[37] && !keys[39]) {
+					if (velX != 0 ) {
+						if ( velX > 0) { velX -= slowing }
+						if (velX < 0 ) { velX += slowing }
+					}
+				}
+				if (!keys[40] && !keys[38]) {
+					if (velY != 0 ) {
+						if ( velY > 0) { velY -= slowing }
+						if (velY < 0 ) { velY += slowing }
+					}
+				}
+
+				velX = Round1Dec( velX );
+				velY = Round1Dec( velY );
+			}
+			function target_keys(){
+				if (keys[90]) { if (Matrice.Z < 10) Matrice.Z++}//Z		
+				if (keys[81]) { if (Matrice.Q < 10) Matrice.Q++}//Q
+				if (keys[83]) { if (Matrice.S < 10) Matrice.S++}//S		
+				if (keys[68]) { if (Matrice.D < 10) Matrice.D++}//D
+
+				if (!keys[90]) { if (Matrice.Z > 0) Matrice.Z--}//Z		
+				if (!keys[81]) { if (Matrice.Q > 0) Matrice.Q--}//Q
+				if (!keys[83]) { if (Matrice.S > 0) Matrice.S--}//S		
+				if (!keys[68]) { if (Matrice.D > 0) Matrice.D--}//D
+			}
+			function getNewPosXY( map, player, xSpeed, ySpeed ){
+				xSpeed = Round1Dec(xSpeed);
+				ySpeed = Round1Dec(ySpeed);
+
+				let tmp = {"X" : player.x + xSpeed, "Y" : player.y + ySpeed };
+
+
+
+				//check if new x wont be out of the map 
+				if (tmp.X < 0 || tmp.X > map.w-player.w ) {
+					tmp.X > map.w-player.w ? tmp.X = map.w-player.w : tmp.X = 0;
+					//cancel the speed, the global one , not the local passed arg(xspeed)
+					velX = 0;				
+				}
+				if (tmp.Y < 0 || tmp.Y > map.h-player.h ) {
+					tmp.Y > map.h-player.h ? tmp.Y = map.h-player.h : tmp.Y = 0;
+					velY = 0;				
+				}
+
+				// oncherche si il est dans la range [-lalejeton / + tailleElement}
+				//check for each blocking component on the map 
+				//////////////////////////
+				// COLLISION AND ALTER DIR
+				///////////////////////// 
+				$.each( map.blocks , function( ind, val ){
+					if (val.type === "quadra") {
+						tmp = updDir_rectONrect( tmp , player , val );
+					}
+					else if(val.type === "circle"){
+						//http://cgp.wikidot.com/circle-to-circle-collision-detection
+						tmp = updDir_cirONcir( tmp, player , val );
+					}
+					
+
+				})
+
+				return tmp;
+			}			
+			function target_fire(  ){
+				let shoot = players.me.shoot;
+				if (keys[90] || keys[81] || keys[83] || keys[68]) {//ZQSD
+					shoot.charge += timeElaps;
+					//si rien n'existe on fais apparaitre un nouveau shoot
+					//si un shoot existe on fait croitre le shoot
+					//si sa taille max est atteinte , oin fire et on reset le shooter
+					if ( shoot.charge > (shoot.attackSpeed) ) {//si le tire et pres a partir
+						console.log(players.me.id + ' a shooté ^^');
+						let node_shoot = set_shootObj( players.me );
+						socket.emit( "p_add_shoot", node_shoot );
+
+
+
+						shoot.charge -= shoot.attackSpeed;// on remet charge a 0 en gardant le surplus
+					}
+
+					///////////////FAIRE UNE FONCT POST charge defined
+					///////////////FAIRE UNE FONCT POST charge defined
+					///////////////FAIRE UNE FONCT POST charge defined
+					//mtn qu'on sais la charge actuelle on calcule les nouvelle dimension
+					shoot = upd_sightLoadXYWH( shoot );
+
+
+
+					///////////////FAIRE UNE FONCT POST charge defined
+					///////////////FAIRE UNE FONCT POST charge defined
+					///////////////FAIRE UNE FONCT POST charge defined
+
+				}else{
+					if (shoot.charge !== 0 ) {
+						shoot.charge>timeElaps? shoot.charge -= timeElaps:shoot.charge=0;	
+					}
+
+					shoot = upd_sightLoadXYWH( shoot );
+				}
+
+				//console.log( shoot.w + " ____ " + shoot.h )
+				players.me.shoot = shoot;
+			}
+					function upd_sightLoadXYWH( shoot ){
+						let centers = getCenterOf( players.me );
+						let chargeRate = Round2Dec(shoot.charge / shoot.attackSpeed );
+						//console.log(chargeRate);
+
+						shoot.w = shoot.wMax * chargeRate;
+						shoot.h = shoot.hMax * chargeRate;
+
+						//avec les nouvelle dimension on peut calculer le point XY centre du cercle du shoot
+						let cX = centers.cX + Math.round( Math.cos(players.me.angle*Math.PI/-180) * ( players.me.w/2 + shoot.w/2) ),
+							cY = centers.cY + Math.round( Math.sin(players.me.angle*Math.PI/-180) * ( players.me.h/2 + shoot.h/2) );
+						//avec le centre du cercle on trouve le point html origin de lelement
+
+						let cercleHtmlXY = getLeftCornerXYof( cX , cY,/*voir value*/ shoot.w , shoot.h);
+						
+						shoot.x = cercleHtmlXY.x;
+						shoot.y = cercleHtmlXY.y;
+
+						return shoot;				
+					}
+					function set_shootObj( player ){ 
+						//{id : "shoot1", owner : "idplayer" ,"fire_time" :  Date.now() ,range : 500, orgX : 300, orgY : 300, angle : 90, speed : 2/*en 100px/sec ou 0.1px/ms*/};
+						let shoot_obj = {
+							id : null,//define once it arrived to the server
+							owner : player.id,
+							fire_time : null,//define once it arrived to the server
+							range : player.shoot.range,
+							orgX : player.shoot.x,
+							orgY : player.shoot.y,
+							w : player.shoot.wMax,
+							h : player.shoot.hMax,
+							angle : player.angle,
+							speed : player.shoot.shootSpeed
+						}
+
+
+						return shoot_obj;
+					}
+			// ------------------------------------------------------- 
+			// ------------------------------------------------------- 
+			// ------------------------------------------------------- 
+
+			function insertUser( p_data ){
+				//add div.idplayer in DOM
+				let $tmp_ele = $('<div></div>')
+				.attr({id : p_data.id , class : "joueur z1500" })
+				.css({"left" : p_data.posX+"px", "top" : p_data.posY+"px", "background-color" : "purple"})
+
+				$('<div></div>')//this is the targeter
+				.attr({id : "targ"+p_data.id , class : "sight z2000" })
+				.css({left : 0, top : 0})
+				.appendTo( $tmp_ele ); 
+
+				$tmp_ele.appendTo("#htmlMap");
+
+				//add this player info in Players
+				players.other[p_data.id] = p_data;
+			}
+
+			function removeUser( p_id ){
+				$('#'+p_id).remove();
+				players.other[p_id] = undefined;
+				delete players.other[p_id];
+				console.log(players);
+			}
+
+			function insertShoot( shoot ){
+				$('<div></div>')
+				.attr({ id : shoot.id })
+				.addClass('shoot z2000')
+				.css({ top : shoot.y+"px", left : shoot.x+"px", "width" : shoot.w+"px", "height" : shoot.h+"px" })
+				.appendTo("#htmlMap");
+
+			}
+
+			function removeShoot( shootId ){
+				$( '#'+shootId ).remove();
+			}
+			//IN GAME BOARD FONCTIONS 
+			function upd_ping( pSend, sSend, pGet ){
+
+
+				$('.playerToServer').text("YOU -> S : " + (sSend - pSend)+"ms");
+				$('.serverToPlayer').text("S -> YOU : " + (pGet - sSend)+"ms" );
+			}
+
+
+			$('#inputbtn').click(function(){
+				let nom =  $('input').val(),
+				shootStat = { range : 1200, shootSpeed : 5, attackSpeed : 200 /*preparation ms per shoot*/, type : "circle" , w : 0, h : 0, wMax : 15, hMax : 15, charge : 0/* 0 to attackSpeed*/  };//add it to playrs.me above
+
+				players.me = { id : nom , velX : 0 , velY : 0 , x : 100 , x : 100 , w : 25 , h : 25, targX : 0, targY : 0, angle : 0, shoot : shootStat};
+
+
+				/// SOCKET DECLARATION ////////////////////////////////////
+				/// give data in the handshake query // here is the new player id
+				socket = io.connect('http://localhost:8080' , { query: "id="+players["me"]["id"] });
+				
+				socket
+				//init the display&transmision of message Server > Player
+				.on('message' , function(data){
+					$('#alertBox').text(data).fadeIn(500 , function(){ $(this).fadeOut( 3000 ) })
+				})
+				//ask the server to send players's list in the room	
+				.emit('check_present_player' , players.me.id )
+				.on("present_player" , function(data){
+					//on loop dans data et on insert le joueur dans le tableau et le DOM ( sauf si ce joueur cest nous..)
+					$.each(data , function( ind, val){
+						if ( val.id !== players.me.id ) {
+							insertUser( val );
+						}
+					})
+
+					// clean display board & start 
+					$('#gameStart').hide();
+					initGame();
+				});
+			})
+
+				// DEVICE RELATIVES VARIABLE
+			function LocalSetUp(  ){
+		      var Local = new Object();
+		      //////////////////////////////////////////////////////////////////////////////////////////
+		      ////////////////////////////DIMENSION SET UP ////////////////////////////////////////////
+		      /////////////////////////////////////////////////////////////////////////////////////////
+		      ///////////////////LOCAL DIMENSION ////////////////////////////
+
+		      var windResizeTimeOut = 0;
+		      var w = $( window ).width();
+		      var h = $( window ).height();
+
+		      var xOrigin = Math.round( w/2 - $("#avatar").width()/2);
+		      var yOrigin = Math.round( h/2 - $("#avatar").height()/2);
+
+		      Local = { windResizeTimeOut, w, h, xOrigin, yOrigin };
+		      ///// MAIN PLAYER SET UP ///////////////////////////////////////////////////////////////////////////////////////
+		      // OUTPUT CREATE UNIK GLOB VAR
+		      return Local;
+		    }
+
+			/// GEOMETRICS FCT 
+			function updDir_rectONrect( tmp, dimR1, dimR2 ){
+					
+
+				let nextDistX = (tmp.X - dimR2.x), 
+					nextDistY = (tmp.Y - dimR2.y),
+					curDistX = (dimR1.x - dimR2.x),
+					curDistY = (dimR1.y - dimR2.y),
+
+					xBlock = nextDistX > -dimR1.w && nextDistX < dimR2.w,
+					yBlock = nextDistY > -dimR1.h && nextDistY < dimR2.h;
+
+				if (xBlock && yBlock) {
+					unposibilityY = curDistX > -dimR1.w && curDistX < dimR2.w,
+					unposibilityX = curDistY > -dimR1.h && curDistY < dimR2.h;
+
+					if (unposibilityY && unposibilityX) {//this condidtion shoudnt make player move at all ,but it's to prevent players to be block an quadra angle 
+						tmp.X = dimR1.x - (tmp.X - dimR1.x);
+						tmp.Y = dimR1.y - (tmp.Y - dimR1.y);
+						return tmp;
+					}
+
+					if ( unposibilityY ) { 
+						dimR1.y - tmp.Y > 0 ? tmp.Y = dimR2.y + dimR2.h : tmp.Y = dimR2.y - dimR1.h;
+						velY = 0;
+					}
+					if ( unposibilityX ) { 
+						dimR1.x - tmp.X > 0 ? tmp.X = dimR2.x + dimR2.w: tmp.X = dimR2.x - dimR1.w;
+						velX = 0;
+					}
+
+				}
+				return tmp;						
+			}
+			function updDir_cirONcir( tmp, dimC1, dimC2 ){
+				let radPlayer = dimC1.w/2,//rad is dist between centerofcircle and edge
+					radBlock = dimC2.w/2,
+					rads = radPlayer + radBlock,
+					nextDistX = (dimC2.x+radBlock) - (tmp.X+radPlayer),
+					nextDistY = (dimC2.y+radBlock) - (tmp.Y+radPlayer),
+					curDistX = (dimC2.x+radBlock) - (dimC1.x+radPlayer),
+					curDistY = (dimC2.y+radBlock) - (dimC1.y+radPlayer);
+
+				if ( nextDistX*nextDistX + nextDistY*nextDistY < rads*rads )
+				{
+						velX = 0;velY = 0;
+						tmp.X = dimC1.x;tmp.Y=dimC1.y;
+				}
+
+				return tmp;					
+			}
+			/// TOOLS FCT 
+			//https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+			function Round1Dec( num ){ //the +0.00001 is use to prevent wrong/false truncate of JS on deep float numb
+				return Math.round( (num + 0.00001) * 10) / 10;
+			}
+			function Round2Dec( num ){
+				return Math.round( (num + 0.00001) * 100) / 100;
+			}
+			function Round3Dec( num ){
+				return Math.round( (num + 0.00001) * 1000) / 1000;
+			}
+
+
+			// TEST FCT 
+			//////////////////
+
+			//orginX & Y have to be center of an circle
+			// dist cant be under half of element size ( element : circle here )
+			function createPoint( angle = 0 , dist = 10 , originX = 800 , originY = 200 ){
+
+				var x = Math.round(originX + Math.cos(angle*Math.PI/-180) * dist);
+				var y = Math.round(originY + Math.sin(angle*Math.PI/-180) * dist);
+
+
+				$('<div></div>')
+				.attr({
+				"class" : "points"
+				})
+				.css({
+				"position" : "absolute",
+				"borderRadius":"300%",
+				"width" : "2px",
+				"height" : "2px",
+				"left" : x+"px",
+				"top" : y+"px",
+				"background-color": "green"              
+				})
+				.appendTo('body')
+				.delay(1000)
+				.fadeOut(500);         
+
+			} 
+		    function getAngleByXerode( matrice, step = 10 ){
+
+		    	//here getangle i used to determined the way player is focusing 
+		    	// so step will direcly depends of the size of player.element
+
+		    	if ( keys[90] || keys[81] || keys[83] || keys[68]){
+		    		let top = step * matrice.Z;let bot = step * matrice.S;
+		    		let right = step * matrice.D;let left = step * matrice.Q;
+		    		var X = right - left;
+		    		var Y = top -bot;
+
+		    		var OM = Math.sqrt((X*X)+(Y*Y));
+		    		var transRatio = 180/Math.PI;// pour passé de l'interval [0 , PI] -> [0 , 180];
+
+					if (Y===0) return Math.acos(X/OM)*transRatio; else return Math.acos(X/OM)*(Y/Math.abs(Y))*transRatio;
+						
+		    	}else return false; 
+		    }
+
+		    function getAngleOfMatrice( Matrice , keys ){
+		      var coeffTotal = Matrice[90] + Matrice[180] + Matrice[270] + Matrice[360];
+		      if ( coeffTotal === 0 ) return false;
+		      if( (keys.ArrowRight && keys.ArrowLeft) || ( keys.ArrowUp && keys.ArrowDown) ) return false;
+
+		      var zero360;// set 0 // 360 fix calcul conflit 
+		      Bag.Main.keys.ArrowUp&&Bag.Main.keys.ArrowRight?zero360=0:zero360=360;
+
+		      var output = ( 90*Matrice[90] + 180*Matrice[180] + 270*Matrice[270] + zero360*Matrice[360] ) / coeffTotal;
+
+		      return Math.round( output ); 
+		    }
+
+		    function getCenterOf( obj ){
+		    	//if (!obj.x || !obj.y || !obj.w || !obj.h ) return undefined;
+		    	let cX = Round1Dec( obj.x + obj.w/2 ),
+		    		cY = Round1Dec( obj.y + obj.h/2 );
+
+		    	return { cX, cY};
+		    }
+
+		    function getLeftCornerXYof( cX, cY, w, h){
+		    	let x = Round1Dec( cX - w/2 ),
+		    		y = Round1Dec( cY - h/2 );
+
+		    	return { x, y};
+		    }			
+		})
+	</script>
+</body>
+</html>
